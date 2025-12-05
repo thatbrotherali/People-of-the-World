@@ -2,20 +2,21 @@
 import { ok, badRequest, serverError } from 'wix-http-functions';
 import wixData from 'wix-data';
 
-// Collection ID must match exactly what you created in Wix Data
 const COLLECTION = 'Decision_Game_Scores';
 
-// Re-used headers (JSON + CORS so your GitHub-hosted game can read the response)
 const baseHeaders = {
   'Content-Type': 'application/json',
   'Access-Control-Allow-Origin': '*'
 };
 
+// Allowed modes, now including 'infinite'
+const ALLOWED_MODES = ['short', 'long', 'infinite'];
+
 /**
  * POST /_functions/decisionGame/saveScore
  * Body (text/plain or JSON): {
  *   initials: "ALI",
- *   mode: "short" | "long",
+ *   mode: "short" | "long" | "infinite",
  *   correct: number,
  *   totalQuestions: number,
  *   totalTimeMs: number,
@@ -26,7 +27,6 @@ export async function post_decisionGame_saveScore(request) {
   let options = { headers: baseHeaders };
 
   try {
-    // Accept both JSON and plain text JSON
     const contentType = request.headers['content-type'] || request.headers['Content-Type'] || '';
     let body;
 
@@ -39,7 +39,7 @@ export async function post_decisionGame_saveScore(request) {
 
     const { initials, mode, correct, totalQuestions, totalTimeMs, avgTimeMs } = body || {};
 
-    if (!mode || (mode !== 'short' && mode !== 'long')) {
+    if (!mode || !ALLOWED_MODES.includes(mode)) {
       options.body = JSON.stringify({ error: 'Invalid or missing mode' });
       return badRequest(options);
     }
@@ -49,7 +49,6 @@ export async function post_decisionGame_saveScore(request) {
       return badRequest(options);
     }
 
-    // Basic validation
     if (
       typeof correct !== 'number' ||
       typeof totalQuestions !== 'number' ||
@@ -73,7 +72,6 @@ export async function post_decisionGame_saveScore(request) {
       createdAt: new Date()
     };
 
-    // Store one row per run for now
     await wixData.insert(COLLECTION, item);
 
     options.body = JSON.stringify({ success: true });
@@ -86,11 +84,17 @@ export async function post_decisionGame_saveScore(request) {
 }
 
 /**
- * GET /_functions/decisionGame/leaderboard?mode=short|long
- * Returns top 100 rows, sorted by:
+ * GET /_functions/decisionGame/leaderboard?mode=short|long|infinite
+ *
+ * short/long  sort:
  *   1) fewest mistakes
  *   2) lowest totalTimeMs
  *   3) lowest avgTimeMs
+ *
+ * infinite sort:
+ *   1) highest correct
+ *   2) lowest avgTimeMs
+ *   3) lowest totalTimeMs
  */
 export async function get_decisionGame_leaderboard(request) {
   let options = { headers: baseHeaders };
@@ -99,31 +103,41 @@ export async function get_decisionGame_leaderboard(request) {
     const queryParams = request.query || {};
     const mode = queryParams.mode;
 
-    if (!mode || (mode !== 'short' && mode !== 'long')) {
-      options.body = JSON.stringify({ error: 'mode query param must be "short" or "long"' });
+    if (!mode || !ALLOWED_MODES.includes(mode)) {
+      options.body = JSON.stringify({ error: 'mode query param must be "short", "long", or "infinite"' });
       return badRequest(options);
     }
 
-    // Pull a chunk and sort in code
     const result = await wixData
       .query(COLLECTION)
       .eq('mode', mode)
-      .limit(1000) // safety upper bound
+      .limit(1000)
       .find();
 
     const items = result.items || [];
 
-    // Sort by your criteria
-    items.sort((a, b) => {
-      const mistakesA = a.mistakes ?? (a.totalQuestions - a.correct);
-      const mistakesB = b.mistakes ?? (b.totalQuestions - b.correct);
+    if (mode === 'infinite') {
+      // Infinite: #correct desc, avgTime asc, totalTime asc
+      items.sort((a, b) => {
+        if (a.correct !== b.correct) return b.correct - a.correct;
 
-      if (mistakesA !== mistakesB) return mistakesA - mistakesB;
+        if (a.avgTimeMs !== b.avgTimeMs) return a.avgTimeMs - b.avgTimeMs;
 
-      if (a.totalTimeMs !== b.totalTimeMs) return a.totalTimeMs - b.totalTimeMs;
+        return a.totalTimeMs - b.totalTimeMs;
+      });
+    } else {
+      // short/long: mistakes asc, totalTime asc, avgTime asc
+      items.sort((a, b) => {
+        const mistakesA = a.mistakes ?? (a.totalQuestions - a.correct);
+        const mistakesB = b.mistakes ?? (b.totalQuestions - b.correct);
 
-      return a.avgTimeMs - b.avgTimeMs;
-    });
+        if (mistakesA !== mistakesB) return mistakesA - mistakesB;
+
+        if (a.totalTimeMs !== b.totalTimeMs) return a.totalTimeMs - b.totalTimeMs;
+
+        return a.avgTimeMs - b.avgTimeMs;
+      });
+    }
 
     const top100 = items.slice(0, 100).map((item, index) => ({
       rank: index + 1,
