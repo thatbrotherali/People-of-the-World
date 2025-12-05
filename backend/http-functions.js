@@ -2,7 +2,7 @@
 import { ok, badRequest, serverError } from 'wix-http-functions';
 import wixData from 'wix-data';
 
-const COLLECTION = 'Decision_Game_Scores';
+const COLLECTION = 'DecisionGameScores';
 
 const baseHeaders = {
   'Content-Type': 'application/json',
@@ -203,7 +203,7 @@ export async function post_decisionGame(request) {
       return badRequest({ body: 'Missing or invalid fields' });
     }
 
-    const COL = 'Decision_Game_Scores';
+    const COL = 'DecisionGameScores';
 
     // Check if we already have a score for this initials+mode
     const existing = await wixData.query(COL)
@@ -273,7 +273,7 @@ export async function get_decisionGame(request) {
       ? queryMode
       : 'short';
 
-    const COL = 'Decision_Game_Scores';
+    const COL = 'DecisionGameScores';
 
     const result = await wixData.query(COL)
       .eq('mode', mode)
@@ -365,7 +365,7 @@ export async function post_decisionGame(request) {
       return badRequest({ body: 'Missing or invalid fields' });
     }
 
-    const COL = 'Decision_Game_Scores';
+    const COL = 'DecisionGameScores';
 
     // Check if we already have a score for this initials+mode
     const existing = await wixData.query(COL)
@@ -435,7 +435,7 @@ export async function get_decisionGame(request) {
       ? queryMode
       : 'short';
 
-    const COL = 'Decision_Game_Scores';
+    const COL = 'DecisionGameScores';
 
     const result = await wixData.query(COL)
       .eq('mode', mode)
