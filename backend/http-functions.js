@@ -127,11 +127,15 @@ export async function post_decisionGame(request) {
       avgReaction
     };
 
+    const now = new Date();
+
     if (existing.items.length === 0) {
       // No existing: insert new
       await wixData.insert(COLLECTION, {
         ...newScore,
-        createdAt: new Date()
+        bestDate: now,
+        createdAt: now,
+        updatedAt: now
       });
     } else {
       const current = existing.items[0];
@@ -150,7 +154,9 @@ export async function post_decisionGame(request) {
         current.questions = questions;
         current.totalTime = totalTime;
         current.avgReaction = avgReaction;
-        current.updatedAt = new Date();
+        const now = new Date();
+        current.bestDate = now;
+        current.updatedAt = now;
         await wixData.update(COLLECTION, current);
       }
       // If not better, do nothing (keep the existing best run)
@@ -210,7 +216,8 @@ export async function get_decisionGame(request) {
       correct: item.correct,
       questions: item.questions,
       totalTime: item.totalTime,
-      avgReaction: item.avgReaction
+      avgReaction: item.avgReaction,
+      date: item.bestDate || item.updatedAt || item.createdAt || null
     }));
 
     // Sort using same logic as isScoreBetter, best → worst
@@ -226,7 +233,8 @@ export async function get_decisionGame(request) {
       correct: s.correct,
       questions: s.questions,
       totalTime: s.totalTime,
-      avgReaction: s.avgReaction
+      avgReaction: s.avgReaction,
+      date: s.date
     }));
 
     return ok({
